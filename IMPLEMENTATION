@@ -1,0 +1,584 @@
+CLASS zcldev_log IMPLEMENTATION.
+  METHOD constructor.
+
+    IF iv_object IS SUPPLIED.
+      ms_log_header-object    = iv_object.
+      ms_log_header-subobject = iv_subobject.
+      ms_log_header-extnumber = iv_extnumber.
+      ms_log_header-aldate    = sy-datum.
+      ms_log_header-altime    = sy-uzeit.
+      ms_log_header-aluser    = sy-uname.
+      ms_log_header-altcode   = sy-tcode.
+      ms_log_header-alprog    = sy-repid.
+    ENDIF.
+
+* инициализация протокола
+    CALL FUNCTION 'BAL_LOG_CREATE'
+      EXPORTING
+        i_s_log                 = ms_log_header
+      IMPORTING
+        e_log_handle            = mv_log_handle
+      EXCEPTIONS
+        log_header_inconsistent = 1
+        OTHERS                  = 2.
+    IF sy-subrc <> 0.
+*    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+*            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+    ENDIF.
+
+* профиль отображения по умолчанию
+    IF is_profile IS INITIAL.
+      CALL FUNCTION 'BAL_DSP_PROFILE_NO_TREE_GET'
+        IMPORTING
+          e_s_display_profile = ms_log_profile.
+    ELSE.
+      ms_log_profile = is_profile.
+    ENDIF.
+
+  ENDMETHOD.
+  METHOD db_load.
+
+    DATA:
+        ls_log_filter               TYPE bal_s_lfil
+      , lt_log_header               TYPE balhdr_t
+      , lt_log_handle               TYPE bal_t_logh
+      , ls_extnumber                TYPE LINE OF bal_r_extn VALUE 'IEQ'
+      , ls_object                   TYPE LINE OF bal_r_obj VALUE 'IEQ'
+      , ls_subobject                TYPE LINE OF bal_r_sub VALUE 'IEQ'
+      , ls_lognumber                TYPE LINE OF bal_r_logn VALUE 'IEQ'
+      .
+
+*create a filter with all relevant criteria:
+    IF iv_object IS SUPPLIED.
+      ls_object-low = iv_object.
+      INSERT ls_object INTO TABLE ls_log_filter-object.
+    ENDIF.
+
+    IF iv_subobject IS SUPPLIED.
+      ls_subobject-low = iv_subobject.
+      INSERT ls_subobject INTO TABLE ls_log_filter-subobject.
+    ENDIF.
+
+    IF iv_extnumber IS SUPPLIED.
+      ls_extnumber-low = iv_extnumber.
+      INSERT ls_extnumber INTO TABLE ls_log_filter-extnumber.
+    ENDIF.
+
+    IF iv_lognumber IS SUPPLIED.
+*определяет по номеру журнала, возвращается в мет.db_save
+      ls_lognumber-low = iv_lognumber.
+      INSERT ls_lognumber INTO TABLE ls_log_filter-lognumber.
+    ENDIF.
+
+*search on DB for these logs
+    CALL FUNCTION 'BAL_DB_SEARCH'
+      EXPORTING
+        i_s_log_filter     = ls_log_filter
+      IMPORTING
+        e_t_log_header     = lt_log_header
+      EXCEPTIONS
+        log_not_found      = 1
+        no_filter_criteria = 2
+        OTHERS             = 3.
+    IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+    ENDIF.
+
+*load logs from DB
+    CALL FUNCTION 'BAL_DB_LOAD'
+      EXPORTING
+        i_t_log_header     = lt_log_header
+      IMPORTING
+        e_t_log_handle     = lt_log_handle
+      EXCEPTIONS
+        no_logs_specified  = 1
+        log_not_found      = 2
+        log_already_loaded = 3
+        OTHERS             = 4.
+    IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+    ENDIF.
+
+    IF rt_log_handle IS SUPPLIED.
+      rt_log_handle = lt_log_handle.
+    ENDIF.
+
+  ENDMETHOD.
+  METHOD db_save.
+
+    DATA:
+        lt_log_handle TYPE bal_t_logh
+      , lt_lgnm       TYPE bal_t_lgnm
+      , ls_lgnm       LIKE LINE OF lt_lgnm
+      .
+
+    INSERT mv_log_handle INTO TABLE lt_log_handle.
+
+    CALL FUNCTION 'BAL_DB_SAVE'
+      EXPORTING
+        i_save_all       = i_save_all
+        i_t_log_handle   = lt_log_handle
+      IMPORTING
+        e_new_lognumbers = lt_lgnm
+      EXCEPTIONS
+        log_not_found    = 1
+        save_not_allowed = 2
+        numbering_error  = 3
+        OTHERS           = 4.
+    IF sy-subrc <> 0.
+      MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+              WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4 RAISING err_save.
+    ENDIF.
+
+    IF lines( lt_lgnm ) GT 0.
+      READ TABLE lt_lgnm INTO ls_lgnm INDEX 1.
+      re_lognumber = ls_lgnm-lognumber.
+    ENDIF.
+
+  ENDMETHOD.
+  METHOD db_show.
+
+    CALL FUNCTION 'BAL_DSP_LOG_DISPLAY'
+      EXPORTING
+        i_s_display_profile  = is_profile
+        i_t_log_handle       = it_log_handle
+      EXCEPTIONS
+        profile_inconsistent = 1
+        internal_error       = 2
+        no_data_available    = 3
+        no_authority         = 4
+        OTHERS               = 5.
+    IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+    ENDIF.
+
+  ENDMETHOD.
+  METHOD msgtab_add.
+
+    FIELD-SYMBOLS:
+        <ls_msgsy>           LIKE LINE OF it_msgsy
+      , <ls_msg>             LIKE LINE OF it_msg
+      , <ls_msg_batch>       LIKE LINE OF it_msg_batch
+      , <ls_msg_bapiret2>    LIKE LINE OF it_msg_bapiret2
+      , <ls_msg_bapireturn>  LIKE LINE OF it_msg_bapireturn
+      .
+
+    IF it_msgsy IS SUPPLIED.
+      LOOP AT it_msgsy ASSIGNING <ls_msgsy>.
+        me->msg_add(
+        EXPORTING
+          is_msgsy          = <ls_msgsy>
+          iv_msg_collect    = iv_msg_collect
+        EXCEPTIONS
+          msg_inconsistent  = 1
+          log_is_full       = 2
+          OTHERS            = 3
+               ).
+        IF sy-subrc <> 0.
+          MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+                     WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4 RAISING err_add.
+        ENDIF.
+      ENDLOOP.
+
+    ELSEIF it_msg IS SUPPLIED.
+      LOOP AT it_msg ASSIGNING <ls_msg>.
+        me->msg_add(
+        EXPORTING
+          is_msg            = <ls_msg>
+          iv_msg_collect    = iv_msg_collect
+        EXCEPTIONS
+          msg_inconsistent  = 1
+          log_is_full       = 2
+          OTHERS            = 3
+               ).
+        IF sy-subrc <> 0.
+          MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+                     WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4 RAISING err_add.
+        ENDIF.
+      ENDLOOP.
+
+    ELSEIF it_msg_batch IS SUPPLIED.
+      LOOP AT it_msg_batch ASSIGNING <ls_msg_batch>.
+        me->msg_add(
+        EXPORTING
+          is_msg_batch      = <ls_msg_batch>
+          iv_msg_collect    = iv_msg_collect
+        EXCEPTIONS
+          msg_inconsistent  = 1
+          log_is_full       = 2
+          OTHERS            = 3
+               ).
+        IF sy-subrc <> 0.
+          MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+                     WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4 RAISING err_add.
+        ENDIF.
+      ENDLOOP.
+
+    ELSEIF it_msg_bapiret2 IS SUPPLIED.
+      LOOP AT it_msg_bapiret2 ASSIGNING <ls_msg_bapiret2>.
+        me->msg_add(
+        EXPORTING
+          is_msg_bapiret2   = <ls_msg_bapiret2>
+          iv_msg_collect    = iv_msg_collect
+        EXCEPTIONS
+          msg_inconsistent  = 1
+          log_is_full       = 2
+          OTHERS            = 3
+               ).
+        IF sy-subrc <> 0.
+          MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+                     WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4 RAISING err_add.
+        ENDIF.
+      ENDLOOP.
+
+    ELSEIF it_msg_bapireturn IS SUPPLIED.
+      LOOP AT it_msg_bapireturn ASSIGNING <ls_msg_bapireturn>.
+        me->msg_add(
+        EXPORTING
+          is_msg_bapireturn = <ls_msg_bapireturn>
+          iv_msg_collect    = iv_msg_collect
+        EXCEPTIONS
+          msg_inconsistent  = 1
+          log_is_full       = 2
+          OTHERS            = 3
+               ).
+        IF sy-subrc <> 0.
+          MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+                     WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4 RAISING err_add.
+        ENDIF.
+      ENDLOOP.
+
+    ENDIF.
+
+  ENDMETHOD.
+  METHOD msg_add.
+
+    DATA:
+        ls_message      TYPE bal_s_msg
+      , lv_dummy        TYPE char1
+      , ls_msg_handle   TYPE balmsghndl
+      .
+
+    IF is_msgsy IS SUPPLIED.
+      MOVE-CORRESPONDING is_msgsy TO ls_message.
+
+    ELSEIF is_msg IS SUPPLIED.
+      ls_message = is_msg.
+
+    ELSEIF is_msg_batch IS SUPPLIED.
+      ls_message-msgty = is_msg_batch-msgtyp.
+      ls_message-msgid = is_msg_batch-msgid.
+      ls_message-msgno = is_msg_batch-msgnr.
+      ls_message-msgv1 = is_msg_batch-msgv1.
+      ls_message-msgv2 = is_msg_batch-msgv2.
+      ls_message-msgv3 = is_msg_batch-msgv3.
+      ls_message-msgv4 = is_msg_batch-msgv4.
+
+    ELSEIF is_msg_bapiret2 IS SUPPLIED.
+      ls_message-msgty = is_msg_bapiret2-type.
+      ls_message-msgid = is_msg_bapiret2-id.
+      ls_message-msgno = is_msg_bapiret2-number.
+      ls_message-msgv1 = is_msg_bapiret2-message_v1.
+      ls_message-msgv2 = is_msg_bapiret2-message_v2.
+      ls_message-msgv3 = is_msg_bapiret2-message_v3.
+      ls_message-msgv4 = is_msg_bapiret2-message_v4.
+
+    ELSEIF is_msg_bapireturn IS SUPPLIED.
+      ls_message-msgty = is_msg_bapireturn-type.
+      IF NOT is_msg_bapireturn-code IS INITIAL.
+        ls_message-msgid = is_msg_bapireturn-code(2).
+        ls_message-msgno = is_msg_bapireturn-code+2(3).
+        ls_message-msgv1 = is_msg_bapireturn-message_v1.
+        ls_message-msgv2 = is_msg_bapireturn-message_v2.
+        ls_message-msgv3 = is_msg_bapireturn-message_v3.
+        ls_message-msgv4 = is_msg_bapireturn-message_v4.
+      ELSE.
+        ls_message-msgid = 'ZDEV_UTIL_MSG'.
+        ls_message-msgno = '000'.
+        ls_message-msgv1 = is_msg_bapireturn-message(50).
+        ls_message-msgv2 = is_msg_bapireturn-message+50(50).
+        ls_message-msgv3 = is_msg_bapireturn-message+100(50).
+        ls_message-msgv4 = is_msg_bapireturn-message+150(50).
+      ENDIF.
+
+    ELSEIF sy-msgid IS NOT INITIAL AND sy-msgty IS NOT INITIAL. " AND sy-msgno IS NOT INITIAL.
+      MOVE-CORRESPONDING sy TO ls_message.
+
+    ENDIF.
+
+    CHECK ls_message IS NOT INITIAL.
+
+    IF iv_msg_collect EQ abap_true.
+      CALL FUNCTION 'BAL_LOG_MSG_CUMULATE'
+        EXPORTING
+          i_log_handle         = mv_log_handle
+          i_s_msg              = ls_message
+          i_compare_attributes = 'X'
+          i_compare_context    = 'X'
+        IMPORTING
+          e_s_msg_handle       = ls_msg_handle
+        EXCEPTIONS
+          log_not_found        = 1
+          msg_inconsistent     = 1
+          log_is_full          = 2
+          OTHERS               = 3.
+    ELSE.
+      CALL FUNCTION 'BAL_LOG_MSG_ADD'
+        EXPORTING
+          i_log_handle     = mv_log_handle
+          i_s_msg          = ls_message
+        IMPORTING
+          e_s_msg_handle   = ls_msg_handle
+        EXCEPTIONS
+          msg_inconsistent = 1
+          log_is_full      = 2
+          OTHERS           = 3.
+    ENDIF.
+    CASE sy-subrc.
+      WHEN 1.  RAISE msg_inconsistent.
+      WHEN 2.  RAISE log_is_full.
+      WHEN OTHERS.
+    ENDCASE.
+
+  ENDMETHOD.
+  METHOD msg_count.
+
+    DATA:
+        lt_handles    TYPE bal_t_logh
+      , lt_messages   TYPE bal_t_msgh
+      , ls_msg_filter TYPE bal_s_mfil
+      , ls_msg_type   TYPE bal_s_msty VALUE 'IEQ'
+      .
+* установка параметров вызова
+    INSERT mv_log_handle INTO TABLE lt_handles.
+
+    IF iv_type IS NOT INITIAL.
+      CLEAR ls_msg_filter.
+      ls_msg_type-low = iv_type.
+      INSERT ls_msg_type INTO TABLE ls_msg_filter-msgty.
+    ENDIF.
+
+* вызов стандартного ФМ (подсчет числа сообщений)
+    CALL FUNCTION 'BAL_GLB_SEARCH_MSG'
+      EXPORTING
+        i_t_log_handle = lt_handles
+        i_s_msg_filter = ls_msg_filter
+      IMPORTING
+        e_t_msg_handle = lt_messages
+      EXCEPTIONS
+        msg_not_found  = 1
+        OTHERS         = 2.
+    IF sy-subrc NE 0.
+      rv_count = 0.
+    ELSE.
+      rv_count = lines( lt_messages ).
+    ENDIF.
+  ENDMETHOD.
+  METHOD msg_delete_all.
+
+    CALL FUNCTION 'BAL_LOG_MSG_DELETE_ALL'
+      EXPORTING
+        i_log_handle  = mv_log_handle
+      EXCEPTIONS
+        log_not_found = 1
+        OTHERS        = 2.
+    IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+    ENDIF.
+
+  ENDMETHOD.
+  METHOD msg_delete_one.
+
+    DATA:
+        ls_msg_handle TYPE balmsghndl
+      , lt_log_handle TYPE bal_t_logh
+      , ls_msg_filter TYPE bal_s_mfil
+      , lt_msg_handle TYPE bal_t_msgh
+      , lr_msgidmsgno TYPE bal_r_idno
+      , ls_msgidmsgno LIKE LINE OF lr_msgidmsgno VALUE 'IEQ'
+      , lr_msgty      TYPE bal_r_msty
+      , ls_msgty      LIKE LINE OF lr_msgty VALUE 'IEQ'
+      .
+    FIELD-SYMBOLS:
+        <ls_msg>     LIKE LINE OF it_msg
+      .
+
+    INSERT mv_log_handle INTO TABLE lt_log_handle.
+
+    LOOP AT it_msg ASSIGNING <ls_msg>.
+      CLEAR: ls_msg_filter, lt_msg_handle.
+
+      ls_msgidmsgno-low-msgid = <ls_msg>-msgid.
+      ls_msgidmsgno-low-msgno = <ls_msg>-msgno.
+      INSERT ls_msgidmsgno INTO TABLE lr_msgidmsgno.
+      ls_msg_filter-msgidmsgno = lr_msgidmsgno.
+
+      IF <ls_msg>-msgty IS NOT INITIAL.
+        ls_msgty-low = <ls_msg>-msgty.
+        INSERT ls_msgty INTO TABLE lr_msgty.
+        ls_msg_filter-msgty = lr_msgty.
+      ENDIF.
+
+
+      CALL FUNCTION 'BAL_GLB_SEARCH_MSG'
+        EXPORTING
+          i_t_log_handle = lt_log_handle
+          i_s_msg_filter = ls_msg_filter
+        IMPORTING
+          e_t_msg_handle = lt_msg_handle
+        EXCEPTIONS
+          msg_not_found  = 1
+          OTHERS         = 2.
+      IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+      ENDIF.
+
+      LOOP AT lt_msg_handle INTO ls_msg_handle.          "#EC CI_NESTED
+        CALL FUNCTION 'BAL_LOG_MSG_DELETE'
+          EXPORTING
+            i_s_msg_handle = ls_msg_handle
+          EXCEPTIONS
+            msg_not_found  = 1
+            log_not_found  = 2
+            OTHERS         = 3.
+        IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+        ENDIF.
+      ENDLOOP.
+    ENDLOOP.
+
+  ENDMETHOD.
+  METHOD msg_from_file_add.
+    DATA: lt_txt     TYPE TABLE OF text1000,
+          ls_message TYPE symsg,
+          lv_line    TYPE string.
+    " Проверка
+    IF cl_gui_frontend_services=>file_exist( file = iv_filename ) = abap_false.
+      RAISE file_not_exist.
+    ENDIF.
+
+    " Читаем файл
+    CALL FUNCTION 'GUI_UPLOAD'
+      EXPORTING
+        filename     = iv_filename
+        read_by_line = abap_true
+      TABLES
+        data_tab     = lt_txt
+      EXCEPTIONS
+        OTHERS       = 1.
+    IF sy-subrc <> 0 OR lines( lt_txt[] ) = 0.
+      RAISE upload_error.
+    ENDIF.
+
+    " добавляем сообщения
+    LOOP AT lt_txt ASSIGNING FIELD-SYMBOL(<lv_txt>).
+      CHECK strlen( <lv_txt> ) > 0.
+      lv_line = <lv_txt>.
+      CONDENSE lv_line.
+
+      CALL METHOD cl_esh_co_logging=>text_message_convert_to_symsg
+        EXPORTING
+          iv_text         = lv_line
+          iv_message_type = iv_msgty
+          iv_message_id   = iv_msgid
+          iv_message_no   = iv_msgno.
+
+      me->msg_add( ).
+    ENDLOOP.
+  ENDMETHOD.
+  METHOD msg_refresh.
+
+    CALL FUNCTION 'BAL_LOG_REFRESH'
+      EXPORTING
+        i_log_handle  = mv_log_handle
+      EXCEPTIONS
+        log_not_found = 1
+        OTHERS        = 2.
+    IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+    ENDIF.
+
+  ENDMETHOD.
+  METHOD msg_show.
+
+    DATA:
+        lt_handles TYPE bal_t_logh
+      , lv_count   TYPE i
+      .
+
+    IF iv_logspace IS NOT INITIAL.
+      lv_count = me->msg_count( iv_type = iv_type ).
+      CHECK lv_count GT 0.
+    ENDIF.
+
+    APPEND mv_log_handle TO lt_handles.
+
+    CALL FUNCTION 'BAL_DSP_LOG_DISPLAY'
+      EXPORTING
+        i_s_display_profile    = ms_log_profile
+        i_t_log_handle         = lt_handles
+        i_t_log_context_filter = it_context_filter
+      EXCEPTIONS
+        profile_inconsistent   = 1
+        internal_error         = 2
+        no_data_available      = 3
+        no_authority           = 4
+        OTHERS                 = 5.
+    IF sy-subrc <> 0.
+*    MESSAGE ID sy-msgid TYPE sy-msgty NUMBER sy-msgno
+*            WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+    ENDIF.
+
+  ENDMETHOD.
+  METHOD profile_set.
+
+* самостоятельное определение
+    IF is_profile IS NOT INITIAL.
+      ms_log_profile = is_profile.
+      EXIT.
+    ENDIF.
+* определяется пользователем по типу
+    CASE iv_user_type.
+      WHEN 1.
+*     полный экран без дерева
+        CALL FUNCTION 'BAL_DSP_PROFILE_NO_TREE_GET'
+          IMPORTING
+            e_s_display_profile = ms_log_profile.
+      WHEN 2.
+*     диалоговое окно без дерева
+        CALL FUNCTION 'BAL_DSP_PROFILE_POPUP_GET'
+          IMPORTING
+            e_s_display_profile = ms_log_profile.
+      WHEN 3.
+*     стандарт для одного протокола
+        CALL FUNCTION 'BAL_DSP_PROFILE_SINGLE_LOG_GET'
+          IMPORTING
+            e_s_display_profile = ms_log_profile.
+      WHEN 4.
+*     стандарт для нескольких протоколов
+        CALL FUNCTION 'BAL_DSP_PROFILE_STANDARD_GET'
+          IMPORTING
+            e_s_display_profile = ms_log_profile.
+      WHEN 5.
+*     иерархия сообщений (DETLEVEL)
+        CALL FUNCTION 'BAL_DSP_PROFILE_DETLEVEL_GET'
+          IMPORTING
+            e_s_display_profile = ms_log_profile.
+    ENDCASE.
+
+* использовать ALV Grid для вывода
+    IF iv_use_grid EQ abap_true.
+      ms_log_profile-use_grid = abap_true.
+    ELSE.
+      ms_log_profile-use_grid = abap_false.
+    ENDIF.
+
+  ENDMETHOD.
+ENDCLASS.
