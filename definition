@@ -1,87 +1,93 @@
-class ZCLDEV_LOG definition
-  public
-  final
-  create public .
+CLASS zcldev_log DEFINITION
+  PUBLIC
+  FINAL
+  CREATE PUBLIC .
 
 *"* public components of class ZCLDEV_LOG
 *"* do not include other source files here!!!
-public section.
-  type-pools ABAP .
-  type-pools ZDEV .
+  PUBLIC SECTION.
+    TYPE-POOLS abap .
+    TYPE-POOLS zdev .
 
-  methods CONSTRUCTOR
-    importing
-      value(IV_OBJECT) type BALOBJ_D optional
-      value(IV_SUBOBJECT) type BALSUBOBJ optional
-      value(IV_EXTNUMBER) type BALNREXT optional
-      !IS_PROFILE type BAL_S_PROF optional .
-  methods PROFILE_SET
-    importing
-      !IV_USER_TYPE type I default 1
-      !IS_PROFILE type BAL_S_PROF optional
-      !IV_USE_GRID type C default 'X' .
-  methods MSG_ADD
-    importing
-      !IS_MSGSY type SYMSG optional
-      !IS_MSG type BAL_S_MSG optional
-      !IS_MSG_BATCH type BDCMSGCOLL optional
-      !IS_MSG_BAPIRET2 type BAPIRET2 optional
-      !IS_MSG_BAPIRETURN type BAPIRETURN optional
-      !IV_MSG_COLLECT type CHAR1 default ' '
-    exceptions
-      MSG_INCONSISTENT
-      LOG_IS_FULL .
-  methods MSGTAB_ADD
-    importing
-      !IT_MSGSY type ZDEV_TT_SYMSG optional
-      !IT_MSG type BAL_T_MSG optional
-      !IT_MSG_BATCH type TAB_BDCMSGCOLL optional
-      !IT_MSG_BAPIRET2 type BAPIRET2_TTY optional
-      !IT_MSG_BAPIRETURN type ICL_T_BAPIRETURN optional
-      !IV_MSG_COLLECT type CHAR1 default ' '
-    exceptions
-      ERR_ADD .
-  methods MSG_SHOW
-    importing
-      !IT_CONTEXT_FILTER type BAL_T_CFIL optional
-      !IV_LOGSPACE type CHAR1 default ' '
-      value(IV_TYPE) type SYMSGTY default ' '
-    preferred parameter IT_CONTEXT_FILTER .
-  methods MSG_COUNT
-    importing
-      value(IV_TYPE) type SYMSGTY default ' '
-    returning
-      value(RV_COUNT) type I .
-  methods MSG_REFRESH .
-  methods MSG_DELETE_ALL .
-  methods MSG_DELETE_ONE
-    importing
-      !IT_MSG type BAL_T_MSG .
-  class-methods DB_LOAD
-    importing
-      !IV_OBJECT type BALOBJ_D optional
-      !IV_SUBOBJECT type BALSUBOBJ optional
-      !IV_EXTNUMBER type BALNREXT optional
-      !IV_LOGNUMBER type BALOGNR optional
-    returning
-      value(RT_LOG_HANDLE) type BAL_T_LOGH .
-  methods DB_SAVE
-    importing
-      !I_SAVE_ALL type XFELD default 'X'
-    returning
-      value(RE_LOGNUMBER) type BALOGNR
-    exceptions
-      ERR_SAVE .
-  class-methods DB_SHOW
-    importing
-      !IT_LOG_HANDLE type BAL_T_LOGH
-      !IS_PROFILE type BAL_S_PROF optional .
-  methods MSG_FROM_FILE_ADD
-    importing
-      value(IV_FILENAME) type STRING optional
-      !IV_MSGTY type SYMSGTY default 'I'
-      !IV_MSGID type SYMSGID default 'zdev_util_msg'
-      !IV_MSGNO type SYMSGNO default '000'
-    exceptions
-      FILE_NOT_EXIST
-      UPLOAD_ERROR .
+    METHODS constructor
+      IMPORTING
+        VALUE(iv_object)    TYPE balobj_d OPTIONAL
+        VALUE(iv_subobject) TYPE balsubobj OPTIONAL
+        VALUE(iv_extnumber) TYPE balnrext OPTIONAL
+        !is_profile         TYPE bal_s_prof OPTIONAL .
+    METHODS profile_set
+      IMPORTING
+        !iv_user_type TYPE i DEFAULT 1
+        !is_profile   TYPE bal_s_prof OPTIONAL
+        !iv_use_grid  TYPE c DEFAULT 'X' .
+    METHODS msg_add
+      IMPORTING
+        !is_msgsy          TYPE symsg OPTIONAL
+        !is_msg            TYPE bal_s_msg OPTIONAL
+        !is_msg_batch      TYPE bdcmsgcoll OPTIONAL
+        !is_msg_bapiret2   TYPE bapiret2 OPTIONAL
+        !is_msg_bapireturn TYPE bapireturn OPTIONAL
+        !iv_msg_collect    TYPE char1 DEFAULT ' '
+      EXCEPTIONS
+        msg_inconsistent
+        log_is_full .
+    METHODS msgtab_add
+      IMPORTING
+        !it_msgsy          TYPE zdev_tt_symsg OPTIONAL
+        !it_msg            TYPE bal_t_msg OPTIONAL
+        !it_msg_batch      TYPE tab_bdcmsgcoll OPTIONAL
+        !it_msg_bapiret2   TYPE bapiret2_tty OPTIONAL
+        !it_msg_bapireturn TYPE icl_t_bapireturn OPTIONAL
+        !iv_msg_collect    TYPE char1 DEFAULT ' '
+      EXCEPTIONS
+        err_add .
+    METHODS msg_show
+      IMPORTING
+        !it_context_filter TYPE bal_t_cfil OPTIONAL
+        !iv_logspace       TYPE char1 DEFAULT ' '
+        VALUE(iv_type)     TYPE symsgty DEFAULT ' '
+          PREFERRED PARAMETER it_context_filter .
+    METHODS msg_count
+      IMPORTING
+        VALUE(iv_type)  TYPE symsgty DEFAULT ' '
+      RETURNING
+        VALUE(rv_count) TYPE i .
+    METHODS msg_refresh .
+    METHODS msg_delete_all .
+    METHODS msg_delete_one
+      IMPORTING
+        !it_msg TYPE bal_t_msg .
+    CLASS-METHODS db_load
+      IMPORTING
+        !iv_object           TYPE balobj_d OPTIONAL
+        !iv_subobject        TYPE balsubobj OPTIONAL
+        !iv_extnumber        TYPE balnrext OPTIONAL
+        !iv_lognumber        TYPE balognr OPTIONAL
+      RETURNING
+        VALUE(rt_log_handle) TYPE bal_t_logh .
+    METHODS db_save
+      IMPORTING
+        !i_save_all         TYPE xfeld DEFAULT 'X'
+      RETURNING
+        VALUE(re_lognumber) TYPE balognr
+      EXCEPTIONS
+        err_save .
+    CLASS-METHODS db_show
+      IMPORTING
+        !it_log_handle TYPE bal_t_logh
+        !is_profile    TYPE bal_s_prof OPTIONAL .
+    METHODS msg_from_file_add
+      IMPORTING
+        VALUE(iv_filename) TYPE string OPTIONAL
+        !iv_msgty          TYPE symsgty DEFAULT 'I'
+        !iv_msgid          TYPE symsgid DEFAULT 'zdev_util_msg'
+        !iv_msgno          TYPE symsgno DEFAULT '000'
+      EXCEPTIONS
+        file_not_exist
+        upload_error .
+  PRIVATE SECTION.
+
+    DATA mv_log_handle TYPE balloghndl .
+    DATA ms_log_header TYPE bal_s_log .
+    DATA ms_log_profile TYPE bal_s_prof .
+ENDCLASS.
